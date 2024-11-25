@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-misused-promises */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 import request from "supertest";
 import app from "../../app";
 import { DataSource } from "typeorm";
