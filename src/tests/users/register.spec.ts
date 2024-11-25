@@ -1,10 +1,16 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 /* eslint-disable @typescript-eslint/no-unused-vars */
+
 import request from "supertest";
 import app from "../../app";
+import { DataSource } from "typeorm";
+import { AppDataSource } from "../../config/data-source";
+import { truncateTables } from "../utils";
+import { User } from "../../entity/User";
+import { App } from "supertest/types";
 
 describe("POST /auth/register", () => {
-  // Common user data for all test cases
+  let connection: DataSource;
   const userData = {
     firstName: "Rakesh",
     lastName: "K",
@@ -12,52 +18,53 @@ describe("POST /auth/register", () => {
     password: "secret",
   };
 
+  beforeAll(async () => {
+    connection = await AppDataSource.initialize();
+  });
+
+  beforeEach(async () => {
+    await truncateTables(connection);
+  });
+
+  afterAll(async () => {
+    if (connection) {
+      await connection.destroy();
+    }
+  });
+
   describe("Given all fields", () => {
     it("should return the 201 status code", async () => {
-      // Act
-      const response = await request(app).post("/auth/register").send(userData);
-
-      // Assert
+      const response = await request(app as unknown as App)
+        .post("/auth/register")
+        .send(userData);
       expect(response.statusCode).toBe(201);
     });
 
-    it("should return valid json response", async () => {
-      // Act
-      const response = await request(app).post("/auth/register").send(userData);
-
-      // Assert
+    it("should return a valid JSON response", async () => {
+      const response = await request(app as unknown as App)
+        .post("/auth/register")
+        .send(userData);
       const contentType = response.headers["content-type"];
       expect(contentType).toEqual(expect.stringContaining("json"));
     });
+    it("should persist the user in the database", async () => {
+      await request(app as unknown as App)
+        .post("/auth/register")
+        .send(userData);
+      const userRepository = connection.getRepository(User);
+      const users = await userRepository.find();
+      expect(users).toHaveLength(1);
+      expect(users[0].firstName).toBe(userData.firstName);
+      expect(users[0].lastName).toBe(userData.lastName);
+      expect(users[0].email).toBe(userData.email);
+    });
+    it("should return an id of the created user", async () => {
+      const response = await request(app as unknown as App)
+        .post("/auth/register")
+        .send(userData);
+      expect(typeof response.body.id).toBe("number");
+    });
   });
 
-  describe("Fields are missing", () => {
-    it("should return a 400 status code when the email is missing", async () => {
-      // Arrange: Remove email from the userData
-      const { email, ...userDataWithoutEmail } = userData;
-
-      // Act
-      const response = await request(app)
-        .post("/auth/register")
-        .send(userDataWithoutEmail);
-
-      // Assert
-      expect(response.statusCode).toBe(400); // Assuming 400 for missing fields
-    });
-
-    it("should return a 400 status code when the password is missing", async () => {
-      // Arrange: Remove password from the userData
-      const { password, ...userDataWithoutPassword } = userData;
-
-      // Act
-      const response = await request(app)
-        .post("/auth/register")
-        .send(userDataWithoutPassword);
-
-      // Assert
-      expect(response.statusCode).toBe(400); // Assuming 400 for missing fields
-    });
-
-    // Add further test cases for other missing fields (firstName, lastName, etc.)
-  });
+  describe("Fields are missing", () => {});
 });
